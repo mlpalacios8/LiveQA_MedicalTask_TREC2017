@@ -131,12 +131,12 @@ def answer_question(question: str):
     answer = get_answer_question_with_web_snippets(question, web_snippets)
     
     complete_answer = f"Category: {category}\nSearch Query: {search_query}\nAnswer: {answer}"
-    return category, search_query, answer, complete_answer
+    return category, search_query, web_snippets, answer, complete_answer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Medical Question Assistant")
     parser.add_argument("question", type=str, help="The medical question to answer")
     args = parser.parse_args()
 
-    category, search_query, answer, complete_answer = answer_question(args.question)
+    category, search_query, web_snippets, answer, complete_answer = answer_question(args.question)
     print(complete_answer)
