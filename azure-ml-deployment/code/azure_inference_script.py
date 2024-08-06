@@ -1,20 +1,58 @@
-""" 
-This was a just a testing script, it was not used in the final deployment. This script uses the basic parse arguments if you wanted to run the script locally.
-The final deployment was done using Azure ML and the script was modified to use the Azure ML SDK.
+### Actual script used in the final deployment ###
 
-"""
 from openai import OpenAI
 import json
-import os
 import requests
-import argparse
+import logging
+# import joblib
+from azure.keyvault.secrets import SecretClient
+from azure.identity import DefaultAzureCredential
 
-# Establishing connection to OpenAI
-openAI_client = OpenAI() # defaults to os.environ.get("OPENAI_API_KEY")
-openAI_model = "gpt-4o-mini"
+def init():
+    """
+    This function initializes the environment variables required for the OpenAI API and the you.com API.
+    It sets the global variables openAI_client, you_API_key, and openAI_model.
+    """
+    # Setting the environment variables which are required for the OpenAI API and you.com API
+    global openAI_client, you_API_key, openAI_model
 
-# Establishing connection to you.com search API
-you_API_key = os.environ.get("YOU_API_KEY")
+    KVUri = f"https://marcelplaygrou6139287083.vault.azure.net"
+
+    credential = DefaultAzureCredential()
+    KVClient = SecretClient(vault_url=KVUri, credential=credential)
+
+    OPENAI_API_KEY = "OPENAI-API-KEY"
+    YOU_API_KEY = "YOU-API-KEY"
+
+    OPENAI_API_KEY = KVClient.get_secret(OPENAI_API_KEY).value
+    YOU_API_KEY = KVClient.get_secret(YOU_API_KEY).value
+
+    openAI_client = OpenAI(api_key=OPENAI_API_KEY)
+    openAI_model = "gpt-4o-mini"
+    you_API_key = YOU_API_KEY
+    print("Init complete")
+
+def run(raw_json_question):
+    """
+    This function takes a medical question as input and returns an answer to the question.
+    The answer is generated using the OpenAI API and the you.com websearch API.
+    It also classifies the question into one of 23 medical categories and identifies the focus of the question to search the web.
+    """
+    data = json.loads(raw_json_question)
+    question = data['question']
+    print(f"\nReceived question: {question}")
+    try:
+        category, search_query, web_snippets, answer, complete_answer = answer_question(question)
+        print("\nQuestion processed successfully")
+        print(f"\nCategory of the question: {category}")
+        print(f"\nSearch Focus Query: {search_query}")
+        print(f"\nAnswer: {answer}")
+        print(f"\n\nWeb Snippets backing up the answer:\n\n {web_snippets}")
+        # Return the complete answer as a string or inside a JSON
+        return json.dumps({"response": complete_answer})
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return json.dumps({"error": str(e)})
 
 def get_ai_web_snippets_for_query(query):
     """ 
@@ -29,6 +67,7 @@ def get_ai_web_snippets_for_query(query):
         headers=headers,
     ).json()
     web_snippet = json.dumps(web_snippet_json)
+
     return web_snippet
 
 def get_response_OpenAI(prompt):
@@ -42,6 +81,7 @@ def get_response_OpenAI(prompt):
         messages=prompt,
         temperature=0,
     )
+
     return completion.choices[0].message.content
 
 def classify_question(question: str):
@@ -115,7 +155,7 @@ def get_answer_question_with_web_snippets(question: str, web_snippets: str):
     """
     system_message = base_system_message + "\n\n" + web_snippets
     message_text = [{"role":"system","content":system_message},
-                    {"role":"user","content":"Question: \n\n" + question}]
+                    {"role":"user","content":question}]
     answer = get_response_OpenAI(prompt=message_text)
 
     return answer
@@ -128,24 +168,16 @@ def answer_question(question: str):
     """
     # Classify the question into one of the 23 medical categories
     category = classify_question(question)
-
+    
     # Identify the focus of the question to search the web
     search_query = get_question_focus_to_search_web(question)
-
+    
     # Get web snippets for the search query
     web_snippets = get_ai_web_snippets_for_query(search_query)
-
+    
     # Generate an answer using the OpenAI API and the web snippets
     answer = get_answer_question_with_web_snippets(question, web_snippets)
     
-    complete_answer = f"Category: {category}\nSearch Query: {search_query}\nAnswer: {answer}"
-    
+    complete_answer = f"Category of question: {category}\nSearch Query and focus of the question: {search_query}\nAnswer: {answer}"
+
     return category, search_query, web_snippets, answer, complete_answer
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Medical Question Assistant")
-    parser.add_argument("question", type=str, help="The medical question to answer")
-    args = parser.parse_args()
-
-    category, search_query, web_snippets, answer, complete_answer = answer_question(args.question)
-    print(complete_answer)

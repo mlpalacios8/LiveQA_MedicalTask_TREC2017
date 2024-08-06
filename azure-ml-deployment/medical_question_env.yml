@@ -1,0 +1,16 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.5
+  - openai
+  - requests
+  - pip
+  - pip:
+    - azure-identity
+    - azure-keyvault-secrets
+    - azureml-core
+    - azureml-dataset-runtime
+    - azureml-inference-server-http
+    - azureml-defaults
+name: medical_question_env
